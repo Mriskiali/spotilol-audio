@@ -1,19 +1,22 @@
 package com.project.lol.webview.injections
 
 /*
- * Audio settings: crossfade / gapless / automix / streaming quality / data saver.
+ * Audio settings — crossfade / streaming quality cap / data saver.
  *
- * SCOPED CAREFULLY — Spotify's web player exposes these prefs as abstract
- * (class `ab` in web-player.a6d2a638.js throws "not supported"): the real
- * writes go through the esperanto ProductState service over wss://dealer
- * (protobuf), not reachable from the WebView. What we CAN do locally:
- *   - persist the user's choice (localStorage + SharedPreferences via bridge)
- *   - apply crossfade client-side ONLY when explicitly enabled (opt-in)
- *   - data saver: CSS/asset-side effects
- * The Web Audio gain node is created ONLY if crossfade > 0, and audio is never
- * routed through a suspended AudioContext (that caused silent playback in an
- * earlier build). No periodic timers: gain rides the media element's own
- * `timeupdate` event instead of a 250ms setInterval.
+ * WHAT WORKS CLIENT-SIDE:
+ *   - crossfade: volume ramp on the media element itself (`el.volume`), NOT Web
+ *     Audio. The web player uses MSE and reports `duration === Infinity`, so
+ *     duration comes from the progressbar `max` attr when needed. Setting
+ *     el.volume cannot mute playback, unlike MediaElementSource routing (which
+ *     also breaks when Spotify already owns the element or the AudioContext
+ *     starts suspended — both bit us in earlier builds).
+ *   - quality CAP (downgrade only): /metadata/4/track/ is wrapped at
+ *     document-start; `files` entries above the cap are stripped so the player
+ *     falls back by itself. Upgrades are impossible: the server never returns
+ *     higher-tier ids for accounts without that tier.
+ *   - data saver: CSS (small covers, block video) + forces the cap to 96.
+ * Gapless/automix were removed: they are native-client / server-side features
+ * with no effect from a WebView (stored flags only mislead the user).
  */
 object AudioSettings {
     const val CONTENT = """
@@ -23,9 +26,7 @@ object AudioSettings {
             var LS='spotilol.audio.';
             var S={
                 crossfade: 0,          // seconds 0..12 (0 = off)
-                gapless: true,
-                automix: false,
-                quality: -1,           // -1 auto,0 low,1 normal,2 high,3 vhigh
+                quality: -1,           // quality CAP: -1 auto, 0=96, 1=160, 2=320
                 downloadQuality: 2,
                 normalize: false,
                 autoAdjust: true,
@@ -41,20 +42,17 @@ object AudioSettings {
             }catch(e){}
             function save(){ try{ localStorage.setItem(LS+'v1',JSON.stringify(S)); }catch(e){} }
             function notify(){ try{ AndBridge.audioPrefsChanged(JSON.stringify(S)); }catch(e){} }
+            function dbg(m){ try{ AndBridge.dbg('a',m); }catch(e){} }
 
             // ---------- QUALITY CAP (real downgrade via metadata files map) ----------
-            // data saver forces the lowest tier; otherwise honour the user's cap.
             function capBits(){
                 if(S.dataSaver) return 96;
                 if(S.quality===0) return 96;
                 if(S.quality===1) return 160;
                 if(S.quality===2) return 320;
-                return 0; // 0 = auto / no cap
+                return 0; // auto / no cap
             }
-            // Spotify `files` map keys look like "mp3_96" / "ogg_vorbis_160" /
-            // "aac_256" / "mp3_320". Strip every entry above the cap so the player
-            // falls back by itself. Upgrading is impossible: the server never
-            // returns higher-tier file ids for an account without that tier.
+            // keys look like "mp3_96" / "ogg_vorbis_160" / "aac_256" / "mp3_320"
             function stripFiles(files,cap){
                 if(cap<=0||!files) return files;
                 var out={},kept=false,bestK=null,bestB=Infinity;
@@ -63,17 +61,15 @@ object AudioSettings {
                     var b=m?parseInt(m[1],10):0;
                     if(b<=cap){ out[k]=files[k]; kept=true; }
                     if(b>0&&b<bestB){ bestB=b; bestK=k; }
-                    try{ AndBridge.dbg('q','cap '+cap+': '+k+'='+b+(b>cap?' DROP':' keep')); }catch(e){}
+                    dbg('cap '+cap+': '+k+'='+b+(b>cap?' DROP':' keep'));
                 }
                 if(!kept&&bestK){
-                    // cap below anything available: keep the lowest so playback never dies
                     out={}; out[bestK]=files[bestK];
-                    try{ AndBridge.dbg('q','cap '+cap+' too strict -> lowest '+bestK); }catch(e){}
+                    dbg('cap '+cap+' too strict -> lowest '+bestK);
                 }
                 return out;
             }
-            // Must run at document-start (SpotifyWebViewClient registers this in the
-            // early payload) so our wrapper is in place before Spotify's own code.
+            // document-start (SpotifyWebViewClient early payload): wrap before Spotify's code
             try{
                 if(!window.__splMetaCapWrapped){
                     window.__splMetaCapWrapped=true;
@@ -94,7 +90,7 @@ object AudioSettings {
                                                     var before=Object.keys(j.files).length;
                                                     j.files=stripFiles(j.files,cap);
                                                     var after=Object.keys(j.files).length;
-                                                    try{ AndBridge.dbg('q','metadata files '+before+'->'+after+' @cap '+cap); }catch(e){}
+                                                    dbg('metadata files '+before+'->'+after+' @cap '+cap);
                                                     return new Response(JSON.stringify(j),{
                                                         status:resp.status,
                                                         statusText:resp.statusText,
@@ -131,83 +127,90 @@ object AudioSettings {
                 },300);
             }
 
-            // ---------- CROSSFADE (opt-in; audio untouched when off) ----------
-            var ac=null, gainNode=null, hookedEl=null;
-            function ensureCtx(){
-                if(ac) return ac;
-                if(S.crossfade<=0) return null;   // opt-in gate: never build a ctx for nothing
+            // ---------- CROSSFADE (el.volume based) ----------
+            // MSE elements report duration=Infinity; fall back to the progressbar max.
+            function trackDuration(el){
                 try{
-                    ac=new (window.AudioContext||window.webkitAudioContext)();
-                    gainNode=ac.createGain(); gainNode.gain.value=1;
-                    gainNode.connect(ac.destination);
-                }catch(e){ ac=null; gainNode=null; }
-                return ac;
-            }
-            function hookEl(el){
-                if(!el||hookedEl===el||!ensureCtx()) return;
+                    var d=el.duration;
+                    if(isFinite(d)&&d>0) return d;
+                }catch(e){}
                 try{
-                    var src=ac.createMediaElementSource(el);
-                    src.connect(gainNode);
-                    hookedEl=el;
-                }catch(e){ /* already routed / unsupported: leave audio alone */ }
+                    var rg=document.querySelector('[data-testid="playback-progressbar"] input[type=range]');
+                    if(rg){ var mx=parseFloat(rg.getAttribute('max')); if(isFinite(mx)&&mx>0) return mx; }
+                }catch(e){}
+                return 0;
             }
+            var wiredEl=null;
             function onTimeUpdate(){
-                if(S.crossfade<=0||!gainNode||!hookedEl||hookedEl.paused) return;
                 try{
-                    var el=hookedEl;
-                    if(!isFinite(el.duration)||el.duration<=0) return;
-                    var remain=(el.duration-el.currentTime)*1000;
-                    var fade=Math.min(S.crossfade*1000, el.duration*500);
-                    var now=ac.currentTime;
-                    gainNode.gain.cancelScheduledValues(now);
-                    if(remain<=fade&&remain>0){
-                        gainNode.gain.setValueAtTime(Math.max(0.001,remain/fade),now);
-                    }else{
-                        gainNode.gain.setValueAtTime(1,now);
+                    var el=wiredEl; if(!el) return;
+                    if(S.crossfade<=0){ if(el.volume!==1) el.volume=1; return; }
+                    var sec=Math.min(S.crossfade,12);
+                    var dur=trackDuration(el);
+                    if(!dur||el.paused){ el.volume=1; return; }
+                    var v=1;
+                    var remain=dur-el.currentTime;
+                    // fade-out over the last `sec` seconds
+                    if(remain<=sec&&remain>0){
+                        v=Math.min(v,Math.max(0.05,remain/sec));
                     }
+                    // fade-in after a fresh track (loadedmetadata stamps the deadline)
+                    var inUntil=window.__splXfInUntil||0;
+                    if(inUntil>0){
+                        var left=(inUntil-Date.now())/1000;
+                        if(left>0) v=Math.min(v,Math.max(0.05,1-left/Math.min(sec,4)));
+                        else window.__splXfInUntil=0;
+                    }
+                    el.volume=v;
                 }catch(e){}
             }
+            function onLoadedMeta(){
+                try{
+                    var el=wiredEl; if(!el) return;
+                    if(S.crossfade>0){
+                        window.__splXfInUntil=Date.now()+Math.min(S.crossfade,4)*1000;
+                        dbg('xfade in-armed: '+el.src.slice(0,60));
+                    }
+                    onTimeUpdate();
+                }catch(e){}
+            }
+            var lastWire=0;
             function wireMedia(){
+                var now=Date.now();
+                if(now-lastWire<2000&&wiredEl) return;  // MutationObserver churn guard
+                lastWire=now;
                 var el=document.querySelector('audio[src]')||document.querySelector('audio')||document.querySelector('video');
-                if(!el||el.__splXfWired) return;
-                el.__splXfWired=true;
-                if(S.crossfade>0) hookEl(el);
+                if(!el) return;
+                if(wiredEl===el){ onTimeUpdate(); return; }
+                wiredEl=el;
                 el.addEventListener('timeupdate',onTimeUpdate);
-                el.addEventListener('loadedmetadata',function(){
-                    if(S.crossfade<=0||!gainNode) return;
-                    try{
-                        var now=ac.currentTime, fade=Math.min(S.crossfade,3);
-                        gainNode.gain.cancelScheduledValues(now);
-                        gainNode.gain.setValueAtTime(0.001,now);
-                        gainNode.gain.linearRampToValueAtTime(1,now+fade);
-                    }catch(e){}
-                });
+                el.addEventListener('loadedmetadata',onLoadedMeta);
+                el.addEventListener('play',onTimeUpdate);
+                dbg('xfade wired: '+S.crossfade+'s cap='+capBits());
+                onTimeUpdate();
             }
             try{
                 var mo=new MutationObserver(function(){ wireMedia(); });
                 mo.observe(document.documentElement,{childList:true,subtree:true});
                 wireMedia();
             }catch(e){ wireMedia(); }
-            // player mounts late -> one extra attempt (no polling loop)
             setTimeout(wireMedia,5000);
 
             // ---------- PUBLIC API ----------
             window.splAudio={
                 get:function(){ return JSON.parse(JSON.stringify(S)); },
                 set:function(patch){
-                    var wasXf=S.crossfade;
                     for(var k in patch){ if(k in S) S[k]=patch[k]; }
                     save(); applyDataSaver(); notify();
+                    // re-apply immediately if crossfade just changed
                     try{
-                        if(S.crossfade>0&&wasXf<=0){ hookedEl=null; wireMedia(); }
-                        else if(S.crossfade<=0&&gainNode&&gainNode.gain){ gainNode.gain.value=1; }
+                        if(wiredEl){ onLoadedMeta(); }
                     }catch(e){}
+                    dbg('prefs: '+JSON.stringify(S));
                     return window.splAudio.get();
                 },
                 setCrossfade:function(sec){ return window.splAudio.set({crossfade:Math.max(0,Math.min(12,Number(sec)||0))}); },
-                setGapless:function(b){ return window.splAudio.set({gapless:!!b}); },
-                setAutomix:function(b){ return window.splAudio.set({automix:!!b}); },
-                setQuality:function(q){ return window.splAudio.set({quality:Math.max(-1,Math.min(3,Number(q)||0))}); },
+                setQuality:function(q){ return window.splAudio.set({quality:Math.max(-1,Math.min(2,Number(q)||0))}); },
                 setDataSaver:function(b){ return window.splAudio.set({dataSaver:!!b}); },
                 dump:function(){ return JSON.stringify(S); }
             };
@@ -217,7 +220,7 @@ object AudioSettings {
                     var p=JSON.parse(json);
                     for(var k in p){ if(k in S) S[k]=p[k]; }
                     save(); applyDataSaver();
-                    if(S.crossfade<=0&&gainNode&&gainNode.gain) gainNode.gain.value=1;
+                    if(S.crossfade<=0&&wiredEl&&wiredEl.volume!==1) wiredEl.volume=1;
                 }catch(e){}
             };
 

@@ -270,8 +270,6 @@ fun SettingsContent(
     var showLyricsStyleDialog by remember { mutableStateOf(false) }
     var showAudioQualityDialog by remember { mutableStateOf(false) }
     var audioCrossfade by remember { mutableStateOf(prefs.getFloat("spl_audio_crossfade", 0f)) }
-    var audioGapless by remember { mutableStateOf(prefs.getBoolean("spl_audio_gapless", true)) }
-    var audioAutomix by remember { mutableStateOf(prefs.getBoolean("spl_audio_automix", false)) }
     var audioQuality by remember { mutableStateOf(prefs.getInt("spl_audio_quality", -1)) }
     var audioDataSaver by remember { mutableStateOf(prefs.getBoolean("spl_audio_dataSaver", false)) }
     var showFormatDialog by remember { mutableStateOf(false) }
@@ -691,34 +689,6 @@ fun SettingsContent(
                             steps = 11
                         )
                     }
-                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-
-                    SettingSwitchTile(
-                        title = stringResource(R.string.settings_audio_gapless),
-                        subtitle = stringResource(R.string.settings_audio_gapless_subtitle),
-                        icon = TablerIcons.Link,
-                        checked = audioGapless,
-                        onCheckedChange = {
-                            audioGapless = it
-                            prefs.edit().putBoolean("spl_audio_gapless", it).apply()
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-
-                    SettingSwitchTile(
-                        title = stringResource(R.string.settings_audio_automix),
-                        subtitle = stringResource(R.string.settings_audio_automix_subtitle),
-                        icon = TablerIcons.ArrowsSort,
-                        checked = audioAutomix,
-                        onCheckedChange = {
-                            audioAutomix = it
-                            prefs.edit().putBoolean("spl_audio_automix", it).apply()
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-
                     SettingTile(
                         title = stringResource(R.string.settings_audio_quality_title),
                         subtitle = when (audioQuality) {
