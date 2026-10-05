@@ -362,21 +362,20 @@
     <string name="widget_empty_subtitle">Open the app to start playing</string>
     <!-- AUDIO QUALITY (Spotilol custom) -->
     <string name="settings_section_audio_quality">AUDIO &amp; QUALITY</string>
-    <string name="settings_audio_quality_info">Data saver &amp; offline quality differ; crossfade is client-side emulated</string>
+    <string name="settings_audio_quality_info">Client-side effects only. Server features (gapless, automix, uploads above your plan) stay with Spotify.</string>
     <string name="settings_audio_crossfade">Crossfade</string>
-    <string name="settings_audio_crossfade_off">Off (gap-fade only)</string>
+    <string name="settings_audio_crossfade_off">Off</string>
     <string name="settings_audio_crossfade_value">%ds</string>
     <string name="settings_audio_gapless">Gapless playback</string>
-    <string name="settings_audio_gapless_subtitle">Remove gaps between tracks</string>
+    <string name="settings_audio_gapless_subtitle">Stored for parity. Effective only in the official Spotify app.</string>
     <string name="settings_audio_automix">Automix</string>
-    <string name="settings_audio_automix_subtitle">AI-mixed transitions (beta)</string>
-    <string name="settings_audio_quality_title">Streaming quality</string>
+    <string name="settings_audio_automix_subtitle">Stored for parity. Automix is generated on Spotify servers.</string>
+    <string name="settings_audio_quality_title">Max streaming quality</string>
     <string name="settings_audio_quality_auto">Auto (adaptive)</string>
     <string name="settings_audio_quality_low">Low (96 kbps)</string>
     <string name="settings_audio_quality_normal">Normal (160 kbps)</string>
-    <string name="settings_audio_quality_high">High (320 kbps)</string>
-    <string name="settings_audio_quality_vhigh">Very High (320+ kbps)</string>
+    <string name="settings_audio_quality_high">High (up to 320 kbps)</string>
     <string name="settings_audio_data_saver">Data saver (streaming)</string>
-    <string name="settings_audio_data_saver_subtitle">Reduce bitrate on cellular</string>
+    <string name="settings_audio_data_saver_subtitle">Caps streaming to Low + shrinks images</string>
     <string name="settings_audio_quality_picker_title">Streaming quality</string>
 </resources>

@@ -42,7 +42,78 @@ object AudioSettings {
             function save(){ try{ localStorage.setItem(LS+'v1',JSON.stringify(S)); }catch(e){} }
             function notify(){ try{ AndBridge.audioPrefsChanged(JSON.stringify(S)); }catch(e){} }
 
-            // ---------- DATA SAVER (safe, CSS only) ----------
+            // ---------- QUALITY CAP (real downgrade via metadata files map) ----------
+            // data saver forces the lowest tier; otherwise honour the user's cap.
+            function capBits(){
+                if(S.dataSaver) return 96;
+                if(S.quality===0) return 96;
+                if(S.quality===1) return 160;
+                if(S.quality===2) return 320;
+                return 0; // 0 = auto / no cap
+            }
+            // Spotify `files` map keys look like "mp3_96" / "ogg_vorbis_160" /
+            // "aac_256" / "mp3_320". Strip every entry above the cap so the player
+            // falls back by itself. Upgrading is impossible: the server never
+            // returns higher-tier file ids for an account without that tier.
+            function stripFiles(files,cap){
+                if(cap<=0||!files) return files;
+                var out={},kept=false,bestK=null,bestB=Infinity;
+                for(var k in files){
+                    var m=/(\d{2,4})\s*$/.exec(k);
+                    var b=m?parseInt(m[1],10):0;
+                    if(b<=cap){ out[k]=files[k]; kept=true; }
+                    if(b>0&&b<bestB){ bestB=b; bestK=k; }
+                    try{ AndBridge.dbg('q','cap '+cap+': '+k+'='+b+(b>cap?' DROP':' keep')); }catch(e){}
+                }
+                if(!kept&&bestK){
+                    // cap below anything available: keep the lowest so playback never dies
+                    out={}; out[bestK]=files[bestK];
+                    try{ AndBridge.dbg('q','cap '+cap+' too strict -> lowest '+bestK); }catch(e){}
+                }
+                return out;
+            }
+            // Must run at document-start (SpotifyWebViewClient registers this in the
+            // early payload) so our wrapper is in place before Spotify's own code.
+            try{
+                if(!window.__splMetaCapWrapped){
+                    window.__splMetaCapWrapped=true;
+                    var of=window.fetch.bind(window);
+                    window.fetch=function(input,init){
+                        var p=of(input,init);
+                        try{
+                            var url=(typeof input==='string')?input:((input&&input.url)||'');
+                            if(url.indexOf('/metadata/4/track/')!==-1){
+                                return p.then(function(resp){
+                                    try{
+                                        var ct=resp.headers.get('content-type')||'';
+                                        if(ct.indexOf('json')===-1) return resp;
+                                        return resp.clone().json().then(function(j){
+                                            try{
+                                                var cap=capBits();
+                                                if(j&&j.files&&typeof j.files==='object'&&cap>0){
+                                                    var before=Object.keys(j.files).length;
+                                                    j.files=stripFiles(j.files,cap);
+                                                    var after=Object.keys(j.files).length;
+                                                    try{ AndBridge.dbg('q','metadata files '+before+'->'+after+' @cap '+cap); }catch(e){}
+                                                    return new Response(JSON.stringify(j),{
+                                                        status:resp.status,
+                                                        statusText:resp.statusText,
+                                                        headers:resp.headers
+                                                    });
+                                                }
+                                            }catch(e){}
+                                            return resp;
+                                        }).catch(function(){ return resp; });
+                                    }catch(e){ return resp; }
+                                });
+                            }
+                        }catch(e){}
+                        return p;
+                    };
+                }
+            }catch(e){}
+
+            // ---------- DATA SAVER (CSS) ----------
             var dsTimer=null;
             function applyDataSaver(){
                 if(dsTimer) clearTimeout(dsTimer);

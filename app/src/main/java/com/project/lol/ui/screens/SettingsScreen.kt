@@ -726,7 +726,6 @@ fun SettingsContent(
                             0 -> stringResource(R.string.settings_audio_quality_low)
                             1 -> stringResource(R.string.settings_audio_quality_normal)
                             2 -> stringResource(R.string.settings_audio_quality_high)
-                            3 -> stringResource(R.string.settings_audio_quality_vhigh)
                             else -> stringResource(R.string.settings_audio_quality_auto)
                         },
                         icon = TablerIcons.WaveSine,
@@ -1185,7 +1184,6 @@ fun SettingsContent(
                 "0" to stringResource(R.string.settings_audio_quality_low),
                 "1" to stringResource(R.string.settings_audio_quality_normal),
                 "2" to stringResource(R.string.settings_audio_quality_high),
-                "3" to stringResource(R.string.settings_audio_quality_vhigh)
             ),
             selected = audioQuality.toString(),
             onSelect = { value ->
