@@ -203,6 +203,8 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     private var currentPosition: Long = 0L
     private var currentDuration: Long = 0L
     private var lastCoverUrl = ""
+    private var coverRequestCounter = 0
+    private var currentTrackId: String? = null
     private var lastActiveContextId: String? = null
     private var isRepeat = "false"
     private var wakeLock: PowerManager.WakeLock? = null
@@ -844,6 +846,9 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
     }
 
     private fun loadCoverArt(url: String) {
+        // Guard against out-of-order completion: a slow download for the previous
+        // track must not overwrite the cover of the current one.
+        val requestId = ++coverRequestCounter
         Thread {
             try {
                 val conn = URL(url).openConnection() as HttpURLConnection
@@ -861,7 +866,14 @@ class MediaNotificationService : MediaBrowserServiceCompat() {
                     val h = (raw.height * scale).toInt()
                     val scaled = Bitmap.createScaledBitmap(raw, w, h, true)
                     if (scaled != raw) raw.recycle()
-                    coverBitmap = scaled
+                    synchronized(this) {
+                        if (requestId != coverRequestCounter || url != lastCoverUrl) {
+                            // superseded by a newer track/request - drop it
+                            scaled.recycle()
+                            return@Thread
+                        }
+                        coverBitmap = scaled
+                    }
                     updateMetadata()
                     showNotification()
                     pushWidgetState(force = true)

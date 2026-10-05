@@ -4,7 +4,7 @@ object MediaUpdater {
     const val CONTENT = """
             window.updMedia = function(){
                 var album=window.__curTrackAlbum||'';
-                var currState=track+'|'+artist+'|'+playing+'|'+repmode+'|'+isfav+'|'+shuffle+'|'+album;
+                var currState=track+'|'+artist+'|'+playing+'|'+repmode+'|'+isfav+'|'+shuffle+'|'+album+'|'+cover;
                 if(currState!==lastState) {
                     lastState=currState;
                     var values={artist:artist,track:track,album:album,playing:playing,repeat:repmode,fav:isfav,shuffle:shuffle,duration:duration,position:position,cover:cover};
