@@ -1,0 +1,41 @@
+name: Build Debug APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK components
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install "platforms;android-37" "build-tools;36.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+      - name: Stub google-services.json
+        run: |
+          cat > app/google-services.json << 'JSON'
+          {
+            "project_info": {"project_number": "000000000000", "project_id": "spotilol-stub", "storage_bucket": "spotilol-stub.appspot.com"},
+            "client": [{"client_info": {"mobilesdk_app_id": "1:000000000000:android:0000000000000000000000", "android_client_info": {"package_name": "com.project.lol"}}, "oauth_client": [], "api_key": [{"current_key": "AIzaSyDummyDummyDummyDummyDummyDummyDummy"}], "services": {"appinvite_service": {"other_platform_oauth_client": []}}}],
+            "configuration_version": "1"
+          }
+          JSON
+          cat app/google-services.json
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Spotilol-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
