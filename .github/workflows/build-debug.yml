@@ -15,10 +15,17 @@ jobs:
           java-version: 21
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - name: Install SDK components
+        with:
+          packages: platform-tools
+      - name: Accept licenses + install SDK/NDK
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager --install "platforms;android-37" "build-tools;36.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          # platform/build-tools/NDK best-effort: AGP auto-downloads what it needs once
+          # licenses are accepted, so a missing package here must not fail the job.
+          for pkg in "platforms;android-37" "build-tools;36.0.0" "ndk;27.0.12077973" "cmake;3.22.1"; do
+            sdkmanager --install "$pkg" >/dev/null 2>&1 || echo "skip $pkg"
+          done
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
       - name: Stub google-services.json
         run: |
           cat > app/google-services.json << 'JSON'
