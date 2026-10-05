@@ -123,7 +123,6 @@ import compose.icons.TablerIcons
 import compose.icons.tablericons.AlertTriangle
 import compose.icons.tablericons.ArrowsMinimize
 import compose.icons.tablericons.ArrowsSort
-import compose.icons.tablericons.Equalizer
 import compose.icons.tablericons.AdjustmentsHorizontal
 import compose.icons.tablericons.ArrowsUpDown
 import compose.icons.tablericons.BrandDiscord
@@ -665,7 +664,7 @@ fun SettingsContent(
 
                 SettingSectionCard(
                     title = stringResource(R.string.settings_section_audio_quality),
-                    icon = TablerIcons.Equalizer,
+                    icon = TablerIcons.WaveSine,
                     info = stringResource(R.string.settings_audio_quality_info)
                 ) {
                     // --- Crossfade (0-12s) ---
@@ -730,7 +729,7 @@ fun SettingsContent(
                             3 -> stringResource(R.string.settings_audio_quality_vhigh)
                             else -> stringResource(R.string.settings_audio_quality_auto)
                         },
-                        icon = TablerIcons.Equalizer,
+                        icon = TablerIcons.WaveSine,
                         onClick = { showAudioQualityDialog = true }
                     )
 
