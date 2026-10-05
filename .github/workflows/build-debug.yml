@@ -27,15 +27,10 @@ jobs:
           done
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
       - name: Stub google-services.json
+        # Dummy config only. Firebase collection is disabled in AndroidManifest and all
+        # Firebase calls are try-guarded. Key shape kept valid (AIza + 33 chars).
         run: |
-          cat > app/google-services.json << 'JSON'
-          {
-            "project_info": {"project_number": "000000000000", "project_id": "spotilol-stub", "storage_bucket": "spotilol-stub.appspot.com"},
-            "client": [{"client_info": {"mobilesdk_app_id": "1:000000000000:android:0000000000000000000000", "android_client_info": {"package_name": "com.project.lol"}}, "oauth_client": [], "api_key": [{"current_key": "AIzaSyDummyDummyDummyDummyDummyDummyDummy"}], "services": {"appinvite_service": {"other_platform_oauth_client": []}}}],
-            "configuration_version": "1"
-          }
-          JSON
-          cat app/google-services.json
+          python3 -c "import json; d={'project_info': {'project_number': '123456789012', 'project_id': 'spotilol-local-build', 'storage_bucket': 'spotilol-local-build.appspot.com'}, 'client': [{'client_info': {'mobilesdk_app_id': '1:123456789012:android:0123456789abcdef01234567', 'android_client_info': {'package_name': 'com.project.lol'}}, 'oauth_client': [], 'api_key': [{'current_key': 'AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMYDUM'}], 'services': {'appinvite_service': {'other_platform_oauth_client': []}}}], 'configuration_version': '1'}; json.dump(d, open('app/google-services.json', 'w'), indent=2); print('google-services.json OK')"
       - name: Build debug APK
         run: |
           chmod +x gradlew

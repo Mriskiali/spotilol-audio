@@ -111,15 +111,19 @@ class SplashActivity : ComponentActivity() {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
 
-        FirebaseCrashlytics.getInstance()
+        try {
+            FirebaseCrashlytics.getInstance()
+        } catch (e: Exception) { android.util.Log.w("Spotilol", "crashlytics off: " + e.message) }
         // Analytics/Performance are not needed for first frame; init off the main thread.
         lifecycleScope.launch(Dispatchers.Default) {
-            FirebasePerformance.getInstance()
-            FirebaseAnalytics.getInstance(this@SplashActivity)
-                .logEvent(FirebaseAnalytics.Event.APP_OPEN, Bundle().apply {
-                    putString(FirebaseAnalytics.Param.SCREEN_NAME, "Spotilol")
-                    putString(FirebaseAnalytics.Param.SCREEN_CLASS, "SplashActivity")
-                })
+            try {
+                FirebasePerformance.getInstance()
+                FirebaseAnalytics.getInstance(this@SplashActivity)
+                    .logEvent(FirebaseAnalytics.Event.APP_OPEN, Bundle().apply {
+                        putString(FirebaseAnalytics.Param.SCREEN_NAME, "Spotilol")
+                        putString(FirebaseAnalytics.Param.SCREEN_CLASS, "SplashActivity")
+                    })
+            } catch (e: Exception) { android.util.Log.w("Spotilol", "analytics off: " + e.message) }
         }
 
         setContent {
