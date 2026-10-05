@@ -123,6 +123,8 @@ import compose.icons.TablerIcons
 import compose.icons.tablericons.AlertTriangle
 import compose.icons.tablericons.ArrowsMinimize
 import compose.icons.tablericons.ArrowsSort
+import compose.icons.tablericons.Equalizer
+import compose.icons.tablericons.AdjustmentsHorizontal
 import compose.icons.tablericons.ArrowsUpDown
 import compose.icons.tablericons.BrandDiscord
 import compose.icons.tablericons.BrightnessUp
@@ -267,6 +269,12 @@ fun SettingsContent(
     var debugUnlocked by remember { mutableStateOf(prefs.getBoolean("DebugUnlocked", false)) }
     var debugTapCount by remember { mutableStateOf(0) }
     var showLyricsStyleDialog by remember { mutableStateOf(false) }
+    var showAudioQualityDialog by remember { mutableStateOf(false) }
+    var audioCrossfade by remember { mutableStateOf(prefs.getFloat("spl_audio_crossfade", 0f)) }
+    var audioGapless by remember { mutableStateOf(prefs.getBoolean("spl_audio_gapless", true)) }
+    var audioAutomix by remember { mutableStateOf(prefs.getBoolean("spl_audio_automix", false)) }
+    var audioQuality by remember { mutableStateOf(prefs.getInt("spl_audio_quality", -1)) }
+    var audioDataSaver by remember { mutableStateOf(prefs.getBoolean("spl_audio_dataSaver", false)) }
     var showFormatDialog by remember { mutableStateOf(false) }
     var showFolderDialog by remember { mutableStateOf(false) }
     var dlFormat by remember {
@@ -654,8 +662,93 @@ fun SettingsContent(
                         }
                     )
                 }
-            }
 
+                SettingSectionCard(
+                    title = stringResource(R.string.settings_section_audio_quality),
+                    icon = TablerIcons.Equalizer,
+                    info = stringResource(R.string.settings_audio_quality_info)
+                ) {
+                    // --- Crossfade (0-12s) ---
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = TablerIcons.AdjustmentsHorizontal, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = stringResource(R.string.settings_audio_crossfade), style = MaterialTheme.typography.bodyLarge)
+                                Text(
+                                    text = if (audioCrossfade > 0f) stringResource(R.string.settings_audio_crossfade_value, audioCrossfade.toInt()) else stringResource(R.string.settings_audio_crossfade_off),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Slider(
+                            value = audioCrossfade,
+                            onValueChange = { v ->
+                                audioCrossfade = v.coerceIn(0f, 12f)
+                                prefs.edit().putFloat("spl_audio_crossfade", audioCrossfade).apply()
+                            },
+                            valueRange = 0f..12f,
+                            steps = 11
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_audio_gapless),
+                        subtitle = stringResource(R.string.settings_audio_gapless_subtitle),
+                        icon = TablerIcons.Link,
+                        checked = audioGapless,
+                        onCheckedChange = {
+                            audioGapless = it
+                            prefs.edit().putBoolean("spl_audio_gapless", it).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_audio_automix),
+                        subtitle = stringResource(R.string.settings_audio_automix_subtitle),
+                        icon = TablerIcons.ArrowsSort,
+                        checked = audioAutomix,
+                        onCheckedChange = {
+                            audioAutomix = it
+                            prefs.edit().putBoolean("spl_audio_automix", it).apply()
+                        }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    SettingTile(
+                        title = stringResource(R.string.settings_audio_quality_title),
+                        subtitle = when (audioQuality) {
+                            -1 -> stringResource(R.string.settings_audio_quality_auto)
+                            0 -> stringResource(R.string.settings_audio_quality_low)
+                            1 -> stringResource(R.string.settings_audio_quality_normal)
+                            2 -> stringResource(R.string.settings_audio_quality_high)
+                            3 -> stringResource(R.string.settings_audio_quality_vhigh)
+                            else -> stringResource(R.string.settings_audio_quality_auto)
+                        },
+                        icon = TablerIcons.Equalizer,
+                        onClick = { showAudioQualityDialog = true }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(start = 44.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+
+                    SettingSwitchTile(
+                        title = stringResource(R.string.settings_audio_data_saver),
+                        subtitle = stringResource(R.string.settings_audio_data_saver_subtitle),
+                        icon = TablerIcons.CloudOff,
+                        checked = audioDataSaver,
+                        onCheckedChange = {
+                            audioDataSaver = it
+                            prefs.edit().putBoolean("spl_audio_dataSaver", it).apply()
+                        }
+                    )
+                }
+
+            }
             if (settingsTab == SettingsTab.Content) {
                 SettingSectionCard(
                     title = stringResource(R.string.settings_section_offline),
@@ -1082,6 +1175,26 @@ fun SettingsContent(
                 prefs.edit().putString("LyricsStyle", value).apply()
             },
             onDismiss = { showLyricsStyleDialog = false }
+        )
+    }
+
+    if (showAudioQualityDialog) {
+        SingleChoiceDialog(
+            title = stringResource(R.string.settings_audio_quality_picker_title),
+            options = listOf(
+                "-1" to stringResource(R.string.settings_audio_quality_auto),
+                "0" to stringResource(R.string.settings_audio_quality_low),
+                "1" to stringResource(R.string.settings_audio_quality_normal),
+                "2" to stringResource(R.string.settings_audio_quality_high),
+                "3" to stringResource(R.string.settings_audio_quality_vhigh)
+            ),
+            selected = audioQuality.toString(),
+            onSelect = { value ->
+                val v = value.toIntOrNull() ?: -1
+                audioQuality = v
+                prefs.edit().putInt("spl_audio_quality", v).apply()
+            },
+            onDismiss = { showAudioQualityDialog = false }
         )
     }
 

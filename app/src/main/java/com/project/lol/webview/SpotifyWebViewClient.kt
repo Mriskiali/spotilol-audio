@@ -162,6 +162,7 @@ class SpotifyWebViewClient(
             add(GaBlocker.CONTENT)
             add(PowerSave.CONTENT)
             add(SettingsFix.CONTENT)
+            add(AudioSettings.CONTENT)
             add(VideoPark.CONTENT)
         }
         return parts.joinToString("\n") { "try{\n$it\n}catch(e){}" }
@@ -330,6 +331,17 @@ class SpotifyWebViewClient(
 
         val js = buildString {
             append("window.autoPlayMode='$autoPlayMode';\n")
+            val audioPrefsJson = org.json.JSONObject().apply {
+                put("crossfade", prefs.getFloat("spl_audio_crossfade", 0f).toDouble())
+                put("gapless", prefs.getBoolean("spl_audio_gapless", true))
+                put("automix", prefs.getBoolean("spl_audio_automix", false))
+                put("quality", prefs.getInt("spl_audio_quality", -1))
+                put("downloadQuality", prefs.getInt("spl_audio_downloadQuality", 2))
+                put("normalize", prefs.getBoolean("spl_audio_normalize", false))
+                put("autoAdjust", prefs.getBoolean("spl_audio_autoAdjust", true))
+                put("dataSaver", prefs.getBoolean("spl_audio_dataSaver", false))
+            }.toString()
+            append("window.__splAudioPrefs=" + org.json.JSONObject.quote(audioPrefsJson) + ";\n")
             append("window.closeNpPref=$closeNowPlay;\n")
             append("window.__spotilolUseProxy=$useProxy;\n")
             append("window.__splTakeControl=$takeControl;\n")
@@ -347,6 +359,7 @@ class SpotifyWebViewClient(
             append(LibraryFetcher.CONTENT)
             append(LibraryParser.CONTENT)
             append(PlaybackControls.CONTENT)
+            append(AudioSettings.CONTENT)
             append(AndroidAuto.CONTENT)
             append(MainLoop.CONTENT)
             append(AutoFeatures.CONTENT)
@@ -449,6 +462,21 @@ class SpotifyWebViewClient(
                 "PlaylistSortEnabled" -> {
                     val sortOn = prefs.getBoolean("PlaylistSortEnabled", true)
                     wv.evaluateJavascript("window.__splPlaylistSortEnabled=$sortOn; if(window.splPlaylistSort) window.splPlaylistSort.refresh();", null)
+                }
+                "spl_audio_crossfade", "spl_audio_gapless", "spl_audio_automix",
+                "spl_audio_quality", "spl_audio_downloadQuality", "spl_audio_normalize",
+                "spl_audio_autoAdjust", "spl_audio_dataSaver" -> {
+                    val audioPrefs = org.json.JSONObject().apply {
+                        put("crossfade", prefs.getFloat("spl_audio_crossfade", 0f).toDouble())
+                        put("gapless", prefs.getBoolean("spl_audio_gapless", true))
+                        put("automix", prefs.getBoolean("spl_audio_automix", false))
+                        put("quality", prefs.getInt("spl_audio_quality", -1))
+                        put("downloadQuality", prefs.getInt("spl_audio_downloadQuality", 2))
+                        put("normalize", prefs.getBoolean("spl_audio_normalize", false))
+                        put("autoAdjust", prefs.getBoolean("spl_audio_autoAdjust", true))
+                        put("dataSaver", prefs.getBoolean("spl_audio_dataSaver", false))
+                    }.toString()
+                    wv.evaluateJavascript("if(window.splAudioRestore) window.splAudioRestore(" + org.json.JSONObject.quote(audioPrefs) + ");", null)
                 }
             }
         }

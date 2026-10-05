@@ -321,4 +321,44 @@ class SpotifyBridge(activityRef: WeakReference<Activity>) {
             try { conn?.disconnect() } catch (_: Exception) {}
         }
     }
+
+    // --- Audio Settings (quality / crossfade / gapless / dataSaver) ---
+    @JavascriptInterface
+    fun audioPrefsChanged(json: String?) {
+        val activity = activityRef.get() ?: return
+        if (json.isNullOrBlank()) return
+        try {
+            val obj = JSONObject(json)
+            val prefs = activity.getSharedPreferences("spotilol_prefs", android.content.Context.MODE_PRIVATE).edit()
+            if (obj.has("crossfade")) prefs.putFloat("spl_audio_crossfade", obj.optDouble("crossfade", 0.0).toFloat())
+            if (obj.has("gapless")) prefs.putBoolean("spl_audio_gapless", obj.optBoolean("gapless", true))
+            if (obj.has("automix")) prefs.putBoolean("spl_audio_automix", obj.optBoolean("automix", false))
+            if (obj.has("quality")) prefs.putInt("spl_audio_quality", obj.optInt("quality", -1))
+            if (obj.has("downloadQuality")) prefs.putInt("spl_audio_downloadQuality", obj.optInt("downloadQuality", 2))
+            if (obj.has("normalize")) prefs.putBoolean("spl_audio_normalize", obj.optBoolean("normalize", false))
+            if (obj.has("autoAdjust")) prefs.putBoolean("spl_audio_autoAdjust", obj.optBoolean("autoAdjust", true))
+            if (obj.has("dataSaver")) prefs.putBoolean("spl_audio_dataSaver", obj.optBoolean("dataSaver", false))
+            prefs.apply()
+            Logger.d(TAG, "audioPrefsChanged: $json")
+        } catch (e: Exception) { Logger.e(TAG, "audioPrefs parse", e) }
+    }
+
+    @JavascriptInterface
+    fun getAudioPrefs(): String {
+        val activity = activityRef.get() ?: return "{}"
+        val sp = activity.getSharedPreferences("spotilol_prefs", android.content.Context.MODE_PRIVATE)
+        return try {
+            JSONObject().apply {
+                put("crossfade", sp.getFloat("spl_audio_crossfade", 0f).toDouble())
+                put("gapless", sp.getBoolean("spl_audio_gapless", true))
+                put("automix", sp.getBoolean("spl_audio_automix", false))
+                put("quality", sp.getInt("spl_audio_quality", -1))
+                put("downloadQuality", sp.getInt("spl_audio_downloadQuality", 2))
+                put("normalize", sp.getBoolean("spl_audio_normalize", false))
+                put("autoAdjust", sp.getBoolean("spl_audio_autoAdjust", true))
+                put("dataSaver", sp.getBoolean("spl_audio_dataSaver", false))
+            }.toString()
+        } catch (e: Exception) { "{}" }
+    }
+
 }
